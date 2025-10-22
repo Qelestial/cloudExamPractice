@@ -2,12 +2,77 @@
 import streamlit as st
 import random
 from dataclasses import dataclass
-from typing import List, Set, Dict
+from typing import List, Set, Dict, Optional
 
 # -----------------------------
 # Config & helpers
 # -----------------------------
-st.set_page_config(page_title="AWS CCP (CLF-C02) 150-Question Practice", layout="centered")
+st.set_page_config(page_title="CCP (CLF-C02) 150-Question Practice", layout="centered")
+
+# Visual tweaks and simple theming
+PRIMARY = "#FF9900"  # AWS orange
+ACCENT = "#232F3E"    # AWS console dark
+
+def inject_css():
+    st.markdown(
+        f"""
+        <style>
+        .stApp .block-container {{
+            max-width: 900px;
+        }}
+        /* Buttons */
+        .stButton>button {{
+            border-radius: 8px;
+            border: 1px solid {PRIMARY}33;
+            background: linear-gradient(180deg, {PRIMARY} 0%, #e68500 100%);
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+        }}
+        .stButton>button:disabled {{
+            background: #c9c9c9 !important;
+            color: #6b6b6b !important;
+            border-color: #c9c9c9 !important;
+        }}
+        /* Radio and checkbox options */
+        div.stRadio > label, div.stCheckbox > label {{
+            font-size: 1.05rem;
+        }}
+        /* Question prompt card */
+        .prompt-card {{
+            padding: 12px 16px;
+            background: #ffffff;
+            border: 1px solid #eceff1;
+            border-radius: 10px;
+            box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+            margin-bottom: 10px;
+        }}
+        /* Domain pill */
+        .pill {{
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 999px;
+            background: {ACCENT};
+            color: #fff;
+            font-size: 0.85rem;
+            margin-bottom: 6px;
+        }}
+        /* Answer breakdown list */
+        .answer-breakdown li {{
+            margin-bottom: 4px;
+        }}
+        /* Answer row highlight */
+        .answer-row {{
+            background: #e8f5e9;
+            border-left: 4px solid #2e7d32;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin: 8px 0 6px 0;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 DOMAINS = {
     "Cloud Concepts": 0.24,
@@ -32,20 +97,147 @@ class Question:
     correct: Set[int]     # indices of correct options (0-based)
     explanation: str
     multi: bool           # True => multiple-response; False => multiple-choice
+    # Optional per-option explanations aligned with options
+    option_explanations: Optional[List[str]] = None
+
+# -----------------------------
+# Option descriptions (for per-option rationales)
+# -----------------------------
+OPTION_DESC: Dict[str, str] = {
+    # Cloud Concepts & Infra
+    "Global reach": "Serve users worldwide via regions/edge locations to reduce latency.",
+    "Global replication": "Replicate/caches content globally to lower latency; not pricing-related.",
+    "Pay-as-you-go": "Replace CapEx with variable OpEx; pay only for what you use.",
+    "Agility": "Rapid experimentation and faster time-to-market via managed services and automation.",
+    "Elasticity": "Automatically add/remove capacity to match demand.",
+    "Fault tolerance": "Continue operating despite component failures.",
+    "Global footprint": "AWS presence in multiple regions/AZs worldwide.",
+    "Edge networking": "Use edge locations (e.g., CloudFront) to cache near users and reduce latency.",
+    "Shared responsibility": "Security model split between AWS (of the cloud) and customer (in the cloud).",
+    "Managed services": "AWS operates underlying infrastructure so you focus on your application.",
+    "Availability Zone": "One or more discrete data centers within an AWS Region.",
+    "Region": "Geographic area containing multiple Availability Zones.",
+    "Edge location": "Global edge sites used by CloudFront and other edge services.",
+    "Local Zone": "Extend AWS compute/storage to metro areas closer to end users for low latency.",
+    "Wavelength Zone": "AWS infrastructure at the 5G edge inside telecom networks.",
+    "High availability": "Design for resilience and minimal downtime across failures.",
+    "Manual procurement": "Traditional slow hardware/software procurement processes.",
+    "Long hardware lead time": "Delays from ordering and receiving hardware on-premises.",
+    "Vendor lock-in": "Being tied to a single vendor/platform with switching costs.",
+    "Manual scaling": "Manually adding/removing capacity instead of automatic scaling.",
+    "Data rack": "Not an AWS global infrastructure term; distractor.",
+
+    # Security & Compliance
+    "Security group": "Stateful virtual firewall at the ENI/instance level.",
+    "NACL": "Stateless network ACL at the subnet boundary.",
+    "Network ACL": "Stateless network ACL at the subnet boundary.",
+    "IAM policy": "JSON policy document that defines permissions for identities/resources.",
+    "WAF rule": "Filter web requests at Layer 7 for common exploits (OWASP).",
+    "AWS CloudTrail": "Records AWS account API activity and events.",
+    "Amazon CloudWatch": "Metrics, logs, dashboards, and alarms for monitoring.",
+    "AWS Config": "Records/assesses resource configurations and drifts over time.",
+    "Amazon GuardDuty": "Intelligent threat detection using logs and network findings.",
+    "AWS Shield Advanced": "Managed DDoS protection with additional features (cost protection, support).",
+    "Amazon CloudWatch Alarms": "Threshold-based notifications/actions on metrics.",
+    "AWS KMS": "Managed service for creating and controlling encryption keys.",
+    "Customer": "Responsibilities in the cloud (e.g., data, apps, guest OS).",
+    "AWS": "Responsibilities of the cloud (e.g., hardware, regions, hypervisor).",
+    "Both share": "Some controls are shared depending on the service and configuration.",
+    "No one": "Not applicable in shared responsibility (used as distractor).",
+    "IAM user with long-lived keys": "Static credentials; avoid embedding in code.",
+    "IAM role": "Use STS to obtain temporary credentials securely.",
+    "Root user": "Do not use routinely; reserve for account setup and rare tasks.",
+    "Group": "Collections of users for attaching policies; not a credential source.",
+    "VPC endpoint policy": "Policy to control access via interface/gateway endpoints.",
+    "Route table": "Determines where traffic is directed within a VPC.",
+    "AWS Artifact": "On-demand access to AWS compliance reports and agreements.",
+    "AWS Organizations": "Multi-account governance and consolidated billing.",
+    "AWS Secrets Manager": "Securely store and rotate secrets; not for compliance reports.",
+    "AWS License Manager": "Manage and track software licenses on AWS.",
+
+    # Technology & Services
+    "Amazon EC2": "Virtual servers with full OS/network control.",
+    "AWS Lambda": "Serverless functions that run code in response to events.",
+    "Amazon ECS on EC2": "Container orchestration using EC2 instances as capacity.",
+    "Amazon Lightsail": "Simple VPS for small apps with bundled resources.",
+    "AWS Fargate": "Serverless compute for containers (no server management).",
+    "Amazon EKS": "Managed Kubernetes control plane and integrations.",
+    "Amazon EMR": "Managed big data frameworks (Hadoop/Spark/HBase).",
+    "AWS Batch": "Batch job scheduling/execution across compute resources.",
+    "AWS Glue": "Serverless data integration (ETL) service.",
+    "Amazon MQ": "Managed Apache ActiveMQ/RabbitMQ message broker.",
+    "Amazon S3": "Object storage with high durability and virtually unlimited scale.",
+    "Amazon EBS": "Block storage for EC2 instances.",
+    "Amazon EFS": "Elastic file system for Linux workloads.",
+    "AWS Storage Gateway": "Hybrid storage integration between on-premises and AWS.",
+    "Amazon RDS": "Managed relational databases (MySQL, Postgres, etc.).",
+    "Amazon DynamoDB": "Serverless NoSQL key-value/document DB with single-digit ms latency.",
+    "Amazon Redshift": "Fully managed data warehouse for analytics at scale.",
+    "Amazon OpenSearch Service": "Search and analytics engine (OpenSearch/Elasticsearch-compatible).",
+    "S3 Standard-IA": "Lower-cost storage for infrequent access; milliseconds retrieval across multiple AZs.",
+    "S3 One Zone-IA": "Lower-cost IA in a single AZ; data lost if AZ fails.",
+    "S3 Glacier Flexible Retrieval": "Archive with minutes to hours retrieval; lower cost than Standard.",
+    "S3 Glacier Deep Archive": "Lowest-cost archive with hours retrieval time.",
+    "S3 Standard": "General purpose storage with low latency, high throughput.",
+    "S3 Glacier Instant Retrieval": "Archive class with milliseconds retrieval for rare access objects.",
+    "S3 Intelligent-Tiering": "Auto-tiering to optimize cost for unknown/variable access patterns.",
+    "Amazon SNS": "Pub/sub notifications with fan-out to subscribers.",
+    "Amazon SQS": "Fully managed message queues to decouple components.",
+    "Amazon EventBridge": "Event bus for routing events between AWS and SaaS/apps.",
+    "AWS Step Functions": "Serverless workflow orchestration/state machines.",
+    "VPC peering": "Network connectivity between two VPCs (same/different accounts/regions).",
+    "AWS Direct Connect": "Dedicated network link from on-premises to AWS.",
+    "VPC endpoints": "Private connectivity to supported AWS services within your VPC.",
+    "NAT Gateway": "Allow private instances to access the internet for outbound traffic.",
+    "AWS Audit Manager": "Continuously collect evidence for audits and frameworks.",
+
+    # Billing, Pricing & Support
+    "AWS TCO Calculator": "Compare on-premises vs AWS total cost of ownership (pre-migration).",
+    "AWS Pricing Calculator": "Estimate AWS costs before deploying resources.",
+    "AWS Cost Explorer": "Visualize and analyze historical and forecasted spend.",
+    "AWS Budgets": "Set cost/usage thresholds and receive alerts.",
+    "Savings Plans": "Commit to consistent usage for discounted compute rates.",
+    "Spot Instances": "Use spare EC2 capacity at deep discounts with interruption risk.",
+    "On-Demand": "Pay for compute with no commitment; flexible and predictable.",
+    "On-Demand Instances": "Pay for compute with no commitment; flexible and predictable.",
+    "Dedicated Hosts": "Physical servers dedicated to you; licensing/affinity use cases.",
+    "AWS Control Tower": "Set up and govern a secure, multi-account AWS environment.",
+    "AWS Billing Conductor": "Customize and share internal pricing/rates across accounts.",
+    "Developer": "Business-hours support; general guidance; limited TA checks.",
+    "Business": "24x7 support, production guidance, full Trusted Advisor checks.",
+    "Enterprise On-Ramp": "For critical workloads; pooled TAM-like engagement; faster response.",
+    "Enterprise": "Mission-critical; designated TAM; fastest response and concierge service.",
+    "AWS Trusted Advisor": "Best-practice checks: cost, performance, security, fault tolerance, quotas.",
+    "AWS Inspector": "Automated security assessment for EC2/ECR/Lambda (vulnerabilities).",
+    "AWS Compute Optimizer": "Recommend right-sizing and instance family choices to optimize cost/perf.",
+    "AWS Systems Manager": "Operate and manage your AWS resources at scale.",
+
+    # Misc/common distractors added during normalization
+    "Not applicable": "Distractor option (not applicable).",
+    "All of the above": "Distractor; avoid unless clearly specified.",
+    "None of the above": "Distractor; avoid unless clearly specified.",
+    "Use a third-party tool": "Generic distractor; AWS-native options typically preferred.",
+    "Refactor the app": "Generic distractor; not specific to the question.",
+}
+
+def describe_option(label: str) -> str:
+    return OPTION_DESC.get(label, "")
 
 # -----------------------------
 # Question factories (templates)
 # -----------------------------
-def make_mcq(idc, domain, prompt, options, correct_idx, explanation):
+def make_mcq(idc, domain, prompt, options, correct_idx, explanation, option_explanations: Optional[List[str]] = None):
     return Question(
         id=idc, domain=domain, prompt=prompt, options=options,
-        correct={correct_idx}, explanation=explanation, multi=False
+        correct={correct_idx}, explanation=explanation, multi=False,
+        option_explanations=option_explanations
     )
 
-def make_mrq(idc, domain, prompt, options, correct_indices, explanation):
+def make_mrq(idc, domain, prompt, options, correct_indices, explanation, option_explanations: Optional[List[str]] = None):
     return Question(
         id=idc, domain=domain, prompt=prompt, options=options,
-        correct=set(correct_indices), explanation=explanation, multi=True
+        correct=set(correct_indices), explanation=explanation, multi=True,
+        option_explanations=option_explanations
     )
 
 def cc_concepts_templates(start_id: int, need: int, rng: random.Random) -> List[Question]:
@@ -95,12 +287,24 @@ def cc_concepts_templates(start_id: int, need: int, rng: random.Random) -> List[
     ]
     wrongs = ["manual capacity planning", "monolithic deployments", "on-prem fixed CapEx", "single-AZ design"]
     for (text, keyword) in benefits:
+        opts = ["Global reach", "Pay-as-you-go", "Elasticity", "Agility"]
+        # Map keyword to the correct index in opts
+        if "elastic" in keyword:
+            correct_idx = 2
+        elif "pay" in keyword or "CapEx" in keyword:
+            correct_idx = 1
+        elif "global" in keyword or "latency" in keyword:
+            correct_idx = 0
+        elif "agility" in keyword or "experiment" in keyword:
+            correct_idx = 3
+        else:
+            correct_idx = 1
         q.append(make_mcq(
             idc, "Cloud Concepts",
             f"Which benefit of cloud computing MOST helps with {text}?",
-            ["Global replication", "Pay-as-you-go", "Elasticity", "Edge networking"],
-            2 if "elastic" in keyword else (1 if "pay" in keyword else (0 if "global" in keyword else 1)),
-            "Match the benefit to the scenario; elasticity handles dynamic capacity needs, pay-as-you-go helps avoid CapEx, global reach reduces latency."
+            opts,
+            correct_idx,
+            "Match the benefit to the scenario: agility speeds experimentation, elasticity handles dynamic capacity needs, pay-as-you-go avoids CapEx, and global reach reduces latency.",
         )); idc += 1
 
     # Multi-response: pick 2 cloud benefits
@@ -501,6 +705,8 @@ def build_questions(total: int, seed: int = 42) -> List[Question]:
             needed = 5 - len(q.options)
             add = rng.sample(extras, needed)
             q.options = q.options + add
+            if q.option_explanations is not None:
+                q.option_explanations = (q.option_explanations or []) + ["Distractor" for _ in add]
         if not q.multi and len(q.options) != 4:
             # Clamp/expand to 4 for consistency
             if len(q.options) > 4:
@@ -511,13 +717,39 @@ def build_questions(total: int, seed: int = 42) -> List[Question]:
                 chosen_wrongs = rng.sample(wrongs, 3)
                 new_opts = [correct_opt] + chosen_wrongs
                 rng.shuffle(new_opts)
+                # Reorder per-option explanations in lockstep
+                if q.option_explanations is not None and len(q.option_explanations) == len(q.options):
+                    correct_expl = q.option_explanations[correct_idx]
+                    wrong_expls = [e for i,e in enumerate(q.option_explanations) if i != correct_idx]
+                    # Align wrong explanations with chosen_wrongs order
+                    chosen_expls = []
+                    for w in chosen_wrongs:
+                        idx = wrongs.index(w)
+                        chosen_expls.append(wrong_expls[idx])
+                    new_expls = [correct_expl] + chosen_expls
+                    # Shuffle explanations to match new_opts order
+                    mapping = {opt: expl for opt, expl in zip([correct_opt] + chosen_wrongs, new_expls)}
+                    q.option_explanations = [mapping[o] for o in new_opts]
                 q.correct = {new_opts.index(correct_opt)}
                 q.options = new_opts
             else:
                 while len(q.options) < 4:
                     q.options.append("None of the above")
+                    if q.option_explanations is not None:
+                        q.option_explanations.append("Distractor")
         normalized.append(q)
-    return normalized
+
+    # De-duplicate by prompt within a session to avoid repeats
+    seen = set()
+    deduped: List[Question] = []
+    for q in normalized:
+        key = f"{q.domain}|{q.prompt.strip()}|{'MRQ' if q.multi else 'MCQ'}"
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(q)
+    rng.shuffle(deduped)
+    return deduped[:total]
 
 # -----------------------------
 # Session state
@@ -535,8 +767,10 @@ if "questions" not in st.session_state:
     st.session_state.show_feedback = False
     st.session_state.finished = False
 
-def reset_quiz():
-    st.session_state.questions = build_questions(TOTAL_QUESTIONS, seed=random.randint(0, 10_000))
+def reset_quiz(total_override: Optional[int] = None, seed: Optional[int] = None):
+    total = total_override if total_override is not None else st.session_state.get("desired_total", TOTAL_QUESTIONS)
+    use_seed = seed if seed is not None else random.randint(0, 10_000)
+    st.session_state.questions = build_questions(total, seed=use_seed)
     st.session_state.index = 0
     st.session_state.correct_count = 0
     st.session_state.answered = {}
@@ -555,7 +789,7 @@ except:
     PASSWORD = "aws2025"  # Fallback for local development only
 
 if not st.session_state.authenticated:
-    st.title("🔒 AWS CCP Practice Exam")
+    st.title("CCP Practice Exam")
     st.write("Please enter the password to access the quiz.")
     
     password_input = st.text_input("Password:", type="password", key="password_field")
@@ -567,13 +801,14 @@ if not st.session_state.authenticated:
                 st.session_state.authenticated = True
                 st.rerun()
             else:
-                st.error("❌ Incorrect password. Please try again.")
+                st.error("Incorrect password. Please try again.")
     
     st.stop()  # Prevent the rest of the app from running
 
 # -----------------------------
 # Header & Info
 # -----------------------------
+inject_css()
 st.title("AWS Certified Cloud Practitioner (CLF-C02) — 150-Question Practice Exam")
 st.caption("Format mirrors AWS exam: MCQ (1 of 4) and MRQ (≥2 of ≥5). Scoring shown as a 100–1000 scaled estimate; pass at 700+")
 
@@ -583,9 +818,11 @@ with st.expander("About format & scoring (from AWS)"):
     st.markdown("This app uses a linear approximation to calculate a scaled score for practice purposes.")
 
 st.sidebar.header("Controls")
+desired_total = st.sidebar.number_input("Number of questions", min_value=10, max_value=150, value=min(TOTAL_QUESTIONS, 65), step=5)
+st.session_state.desired_total = int(desired_total)
+seed_val = st.sidebar.number_input("Randomization seed", value=42, step=1)
 if st.sidebar.button("Start Over (new set)"):
-    reset_quiz()
-seed_val = st.sidebar.number_input("Randomization seed (for reproducible sets)", value=42, step=1)
+    reset_quiz(total_override=int(desired_total), seed=int(seed_val))
 
 # -----------------------------
 # Main quiz flow
@@ -602,18 +839,23 @@ def record_domain(q: Question, got_it: bool):
 if not finished and idx < len(qs):
     q = qs[idx]
     st.subheader(f"Question {idx+1} of {len(qs)}")
+    # Progress + domain
+    st.progress(idx / len(qs))
+    st.markdown(f"<span class=\"pill\">{q.domain}</span>", unsafe_allow_html=True)
     prompt = q.prompt + (f"  \n**Select {len(q.correct)}.**" if q.multi else "")
     st.write(prompt)
+
+    already_answered = (q.id in st.session_state.answered)
 
     if q.multi:
         # Multi-response: checkboxes
         selections = []
         for i,opt in enumerate(q.options):
-            if st.checkbox(opt, key=f"chk-{q.id}-{i}"):
+            if st.checkbox(opt, key=f"chk-{q.id}-{i}", disabled=already_answered):
                 selections.append(i)
     else:
         # MCQ: radio buttons
-        choice = st.radio("Please choose one:", q.options, index=None, key=f"rad-{q.id}")
+        choice = st.radio("Please choose one:", q.options, index=None, key=f"rad-{q.id}", disabled=already_answered)
         selections = [] if choice is None else [q.options.index(choice)]
 
     # Precompute selection set and validity for this question
@@ -621,10 +863,10 @@ if not finished and idx < len(qs):
     valid_selection = (len(sel_set) == len(q.correct)) if q.multi else (len(sel_set) == 1)
 
     col1, col2, col3 = st.columns([1,1,1])
-    submitted = col1.button("Submit answer", use_container_width=True)
-    # Enable Next immediately after a valid submit (in this same run)
-    next_disabled = (q.id not in st.session_state.answered) and not (submitted and valid_selection)
-    nextq = col2.button("Next question ➜", use_container_width=True, disabled=next_disabled)
+    submitted = col1.button("Submit answer", use_container_width=True, disabled=already_answered)
+    # Next enabled once answered
+    next_disabled = not already_answered
+    nextq = col2.button("Next Question", use_container_width=True, disabled=next_disabled)
     finish_now = col3.button("Finish Quiz", use_container_width=True)
 
     if submitted:
@@ -634,17 +876,36 @@ if not finished and idx < len(qs):
             st.warning("Please select one option before submitting.")
         else:
             st.session_state.answered[q.id] = sel_set
-            correct = (sel_set == q.correct)
-            if correct:
+            is_correct = (sel_set == q.correct)
+            if is_correct:
                 st.session_state.correct_count += 1
-            record_domain(q, correct)
-            # Feedback
-            st.markdown("—" * 30)
-            st.write(f"**{'✅ Correct!' if correct else '❌ Not quite.'}**")
-            # Show correct answers
-            corr_labels = [q.options[i] for i in sorted(list(q.correct))]
-            st.write("**Answer:** " + (", ".join(corr_labels)))
-            st.info(q.explanation)
+            record_domain(q, is_correct)
+            # Rerun to immediately reflect disabled submit and enabled next, and show feedback
+            st.rerun()
+
+    # If already answered, display feedback and explanations
+    if already_answered:
+        ans_set = st.session_state.answered[q.id]
+        correct_now = (ans_set == q.correct)
+        st.markdown("-" * 30)
+        st.write(f"**{'Correct!' if correct_now else 'Not quite.'}**")
+        corr_labels = [q.options[i] for i in sorted(list(q.correct))]
+        st.markdown(f"<div class='answer-row'><strong>Answer:</strong> {', '.join(corr_labels)}</div>", unsafe_allow_html=True)
+        st.info(q.explanation)
+
+        st.markdown("**Answer breakdown**")
+        for i, opt in enumerate(q.options):
+            mark = "(Correct)" if i in q.correct else "(Incorrect)"
+            if q.option_explanations and len(q.option_explanations) == len(q.options):
+                expl = q.option_explanations[i]
+            else:
+                base = describe_option(opt)
+                if i in q.correct:
+                    expl = q.explanation or base
+                else:
+                    suffix = " - Not the best fit for this scenario." if base else "Not the best fit for this scenario."
+                    expl = (base + suffix) if base else suffix
+            st.write(f"- {mark} {opt}: {expl}")
 
     if nextq and (q.id in st.session_state.answered):
         st.session_state.index += 1
@@ -665,14 +926,14 @@ if st.session_state.finished:
     total_answered = len(st.session_state.answered)
     raw = st.session_state.correct_count
     # If user ended early, only count what was answered but scale to total attempted
-    total_for_score = total_answered if total_answered > 0 else TOTAL_QUESTIONS
+    total_for_score = total_answered if total_answered > 0 else len(st.session_state.questions)
     scaled = raw_to_scaled(raw, total_for_score)
     passed = scaled >= 700
 
     st.header("Final Results")
     st.metric(label="Scaled Score (estimate)", value=f"{scaled} / 1000")
-    st.metric(label="Status", value=("✅ PASSED" if passed else "❌ FAILED"))
-    st.write(f"Answered: **{total_answered}** / {TOTAL_QUESTIONS}  •  Correct: **{raw}**")
+    st.metric(label="Status", value=("PASSED" if passed else "FAILED"))
+    st.write(f"Answered: **{total_answered}** / {len(st.session_state.questions)}  •  Correct: **{raw}**")
 
     # Domain breakdown
     st.subheader("Domain breakdown")
@@ -681,8 +942,7 @@ if st.session_state.finished:
         st.write(f"- **{dom}**: {c}/{t} correct ({pct:.1f}%)")
 
     st.divider()
-    if st.button("Retake (new randomized set)"):
-        reset_quiz()
-        # apply sidebar seed if changed
-        st.session_state.questions = build_questions(TOTAL_QUESTIONS, seed=int(seed_val))
+    if st.button("Retake (apply settings)"):
+        reset_quiz(total_override=int(st.session_state.get("desired_total", TOTAL_QUESTIONS)), seed=int(seed_val))
         st.experimental_rerun()
+
