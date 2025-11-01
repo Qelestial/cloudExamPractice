@@ -19,6 +19,7 @@ def inject_css():
         <style>
         .stApp .block-container {{
             max-width: 900px;
+            padding-top: 1rem;
         }}
         /* Buttons */
         .stButton>button {{
@@ -34,40 +35,111 @@ def inject_css():
             color: #6b6b6b !important;
             border-color: #c9c9c9 !important;
         }}
-        /* Radio and checkbox options */
+        /* Radio and checkbox options - improved mobile readability */
         div.stRadio > label, div.stCheckbox > label {{
-            font-size: 1.05rem;
+            font-size: 1.1rem;
+            line-height: 1.6;
         }}
-        /* Question prompt card */
+        div[role="radiogroup"] label {{
+            padding: 14px 12px !important;
+            margin: 8px 0 !important;
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+        div[role="radiogroup"] label:hover {{
+            background: #e8f4f8;
+            border-color: {PRIMARY};
+        }}
+        div[role="radiogroup"] label[data-checked="true"] {{
+            background: #fff3e0;
+            border-color: {PRIMARY};
+            font-weight: 500;
+        }}
+        /* Checkbox styling */
+        div.stCheckbox {{
+            padding: 14px 12px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+        }}
+        div.stCheckbox:hover {{
+            background: #e8f4f8;
+            border-color: {PRIMARY};
+        }}
+        /* Question prompt card - better mobile padding */
         .prompt-card {{
-            padding: 12px 16px;
+            padding: 18px 16px;
             background: #ffffff;
             border: 1px solid #eceff1;
             border-radius: 10px;
             box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
-            margin-bottom: 10px;
+            margin-bottom: 16px;
+        }}
+        /* Question text - larger and more readable */
+        .question-text {{
+            font-size: 1.15rem;
+            line-height: 1.7;
+            color: #1a1a1a;
+            margin-bottom: 20px;
         }}
         /* Domain pill */
         .pill {{
             display: inline-block;
-            padding: 2px 10px;
+            padding: 4px 12px;
             border-radius: 999px;
             background: {ACCENT};
             color: #fff;
             font-size: 0.85rem;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
         }}
         /* Answer breakdown list */
         .answer-breakdown li {{
-            margin-bottom: 4px;
+            margin-bottom: 8px;
+            line-height: 1.6;
         }}
         /* Answer row highlight */
         .answer-row {{
             background: #e8f5e9;
             border-left: 4px solid #2e7d32;
-            padding: 8px 12px;
+            padding: 12px 16px;
             border-radius: 6px;
-            margin: 8px 0 6px 0;
+            margin: 12px 0 8px 0;
+            font-size: 1.05rem;
+        }}
+        /* Welcome screen styling */
+        .welcome-title {{
+            font-size: 2rem;
+            font-weight: 700;
+            color: {ACCENT};
+            text-align: center;
+            margin-bottom: 1rem;
+            line-height: 1.3;
+        }}
+        .welcome-subtitle {{
+            font-size: 1.1rem;
+            color: #555;
+            text-align: center;
+            margin-bottom: 2rem;
+        }}
+        /* Mobile optimizations */
+        @media (max-width: 640px) {{
+            .stApp .block-container {{
+                padding-left: 0.5rem;
+                padding-right: 0.5rem;
+            }}
+            .question-text {{
+                font-size: 1.05rem;
+            }}
+            div[role="radiogroup"] label, div.stCheckbox {{
+                padding: 12px 10px;
+            }}
+            .welcome-title {{
+                font-size: 1.5rem;
+            }}
         }}
         </style>
         """,
@@ -758,6 +830,10 @@ def build_questions(total: int, seed: int = 42) -> List[Question]:
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
+# Initialize quiz started state
+if "quiz_started" not in st.session_state:
+    st.session_state.quiz_started = False
+
 if "questions" not in st.session_state:
     st.session_state.questions = build_questions(TOTAL_QUESTIONS, seed=42)
     st.session_state.index = 0
@@ -777,6 +853,7 @@ def reset_quiz(total_override: Optional[int] = None, seed: Optional[int] = None)
     st.session_state.per_domain = {}
     st.session_state.show_feedback = False
     st.session_state.finished = False
+    st.session_state.quiz_started = False  # Reset to welcome screen
 
 # -----------------------------
 # Password Protection
@@ -806,23 +883,78 @@ if not st.session_state.authenticated:
     st.stop()  # Prevent the rest of the app from running
 
 # -----------------------------
-# Header & Info
+# CSS Injection (after auth)
 # -----------------------------
 inject_css()
-st.title("AWS Certified Cloud Practitioner (CLF-C02) — 150-Question Practice Exam")
-st.caption("Format mirrors AWS exam: MCQ (1 of 4) and MRQ (≥2 of ≥5). Scoring shown as a 100–1000 scaled estimate; pass at 700+")
 
-with st.expander("About format & scoring (from AWS)"):
-    st.markdown("- Multiple-choice & multiple-response; 65 total on the real exam (50 scored + 15 unscored). No penalty for guessing.")
-    st.markdown("- Scaled scoring **100–1000**, passing **700**; compensatory model (pass overall).")
-    st.markdown("This app uses a linear approximation to calculate a scaled score for practice purposes.")
+# -----------------------------
+# Welcome Screen
+# -----------------------------
+if not st.session_state.quiz_started:
+    st.markdown("<h1 class='welcome-title'>AWS Certified Cloud Practitioner<br/>(CLF-C02)</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='welcome-subtitle'>150-Question Practice Exam</p>", unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Info boxes
+    col1, col2 = st.columns(2)
+    with col1:
+        st.info("**Format**\n\nMultiple-choice (MCQ) and multiple-response (MRQ) questions mirroring the AWS exam format.")
+    with col2:
+        st.info("**Scoring**\n\nScaled 100–1000, passing score is 700+. Linear approximation for practice.")
+    
+    st.markdown("")
+    
+    with st.expander("📖 About the Real Exam"):
+        st.markdown("- **65 questions** total (50 scored + 15 unscored)")
+        st.markdown("- **90 minutes** to complete")
+        st.markdown("- **No penalty** for guessing")
+        st.markdown("- **Scaled scoring**: 100–1000, passing at 700+")
+        st.markdown("- **Compensatory model**: Overall pass (not domain-specific)")
+    
+    st.markdown("---")
+    
+    # Settings
+    st.subheader("Quiz Settings")
+    col1, col2 = st.columns(2)
+    with col1:
+        desired_total = st.number_input("Number of questions", min_value=10, max_value=150, value=min(TOTAL_QUESTIONS, 65), step=5)
+        st.session_state.desired_total = int(desired_total)
+    with col2:
+        seed_val = st.number_input("Randomization seed", value=42, step=1)
+    
+    st.markdown("")
+    
+    # Start button - centered
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("▶️ Start Quiz", use_container_width=True, type="primary"):
+            # Apply settings if different from current
+            if int(desired_total) != len(st.session_state.questions):
+                reset_quiz(total_override=int(desired_total), seed=int(seed_val))
+            st.session_state.quiz_started = True
+            st.rerun()
+    
+    st.stop()
 
-st.sidebar.header("Controls")
-desired_total = st.sidebar.number_input("Number of questions", min_value=10, max_value=150, value=min(TOTAL_QUESTIONS, 65), step=5)
-st.session_state.desired_total = int(desired_total)
-seed_val = st.sidebar.number_input("Randomization seed", value=42, step=1)
-if st.sidebar.button("Start Over (new set)"):
-    reset_quiz(total_override=int(desired_total), seed=int(seed_val))
+# -----------------------------
+# Sidebar (only shown during quiz)
+# -----------------------------
+st.sidebar.header("Quiz Controls")
+st.sidebar.write(f"**Question:** {st.session_state.index + 1} / {len(st.session_state.questions)}")
+st.sidebar.write(f"**Answered:** {len(st.session_state.answered)}")
+st.sidebar.write(f"**Correct:** {st.session_state.correct_count}")
+st.sidebar.markdown("---")
+if st.sidebar.button("🔄 Start Over"):
+    reset_quiz()
+    st.rerun()
+if st.sidebar.button("⬅️ Back to Welcome"):
+    st.session_state.quiz_started = False
+    st.rerun()
+
+# -----------------------------
+# Header & Info (removed from here - now in welcome screen)
+# -----------------------------
 
 # -----------------------------
 # Main quiz flow
@@ -838,12 +970,20 @@ def record_domain(q: Question, got_it: bool):
 
 if not finished and idx < len(qs):
     q = qs[idx]
-    st.subheader(f"Question {idx+1} of {len(qs)}")
-    # Progress + domain
+    
+    # Compact header
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown(f"<span class=\"pill\">{q.domain}</span>", unsafe_allow_html=True)
+    with col2:
+        st.caption(f"{idx+1} / {len(qs)}")
+    
+    # Progress bar
     st.progress(idx / len(qs))
-    st.markdown(f"<span class=\"pill\">{q.domain}</span>", unsafe_allow_html=True)
-    prompt = q.prompt + (f"  \n**Select {len(q.correct)}.**" if q.multi else "")
-    st.write(prompt)
+    
+    # Question text - larger and more readable
+    prompt = q.prompt + (f"  \n**Select {len(q.correct)} answers.**" if q.multi else "")
+    st.markdown(f"<div class='question-text'>{prompt}</div>", unsafe_allow_html=True)
 
     already_answered = (q.id in st.session_state.answered)
 
@@ -887,25 +1027,32 @@ if not finished and idx < len(qs):
     if already_answered:
         ans_set = st.session_state.answered[q.id]
         correct_now = (ans_set == q.correct)
-        st.markdown("-" * 30)
-        st.write(f"**{'Correct!' if correct_now else 'Not quite.'}**")
+        st.markdown("---")
+        if correct_now:
+            st.success("✅ **Correct!**")
+        else:
+            st.error("❌ **Not quite.**")
+        
         corr_labels = [q.options[i] for i in sorted(list(q.correct))]
-        st.markdown(f"<div class='answer-row'><strong>Answer:</strong> {', '.join(corr_labels)}</div>", unsafe_allow_html=True)
-        st.info(q.explanation)
+        st.markdown(f"<div class='answer-row'><strong>Correct Answer:</strong> {', '.join(corr_labels)}</div>", unsafe_allow_html=True)
+        
+        st.info(f"**Explanation:** {q.explanation}")
 
-        st.markdown("**Answer breakdown**")
-        for i, opt in enumerate(q.options):
-            mark = "(Correct)" if i in q.correct else "(Incorrect)"
-            if q.option_explanations and len(q.option_explanations) == len(q.options):
-                expl = q.option_explanations[i]
-            else:
-                base = describe_option(opt)
-                if i in q.correct:
-                    expl = q.explanation or base
+        with st.expander("📝 View Answer Breakdown"):
+            for i, opt in enumerate(q.options):
+                mark = "✓" if i in q.correct else "✗"
+                if q.option_explanations and len(q.option_explanations) == len(q.options):
+                    expl = q.option_explanations[i]
                 else:
-                    suffix = " - Not the best fit for this scenario." if base else "Not the best fit for this scenario."
-                    expl = (base + suffix) if base else suffix
-            st.write(f"- {mark} {opt}: {expl}")
+                    base = describe_option(opt)
+                    if i in q.correct:
+                        expl = q.explanation or base
+                    else:
+                        suffix = " - Not the best fit for this scenario." if base else "Not the best fit for this scenario."
+                        expl = (base + suffix) if base else suffix
+                st.markdown(f"**{mark} {opt}**  \n{expl}")
+                if i < len(q.options) - 1:
+                    st.markdown("")
 
     if nextq and (q.id in st.session_state.answered):
         st.session_state.index += 1
@@ -930,19 +1077,35 @@ if st.session_state.finished:
     scaled = raw_to_scaled(raw, total_for_score)
     passed = scaled >= 700
 
-    st.header("Final Results")
-    st.metric(label="Scaled Score (estimate)", value=f"{scaled} / 1000")
-    st.metric(label="Status", value=("PASSED" if passed else "FAILED"))
-    st.write(f"Answered: **{total_answered}** / {len(st.session_state.questions)}  •  Correct: **{raw}**")
+    st.header("🎯 Final Results")
+    
+    # Score display
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric(label="Scaled Score", value=f"{scaled} / 1000")
+    with col2:
+        if passed:
+            st.metric(label="Status", value="✅ PASSED")
+        else:
+            st.metric(label="Status", value="❌ FAILED")
+    
+    st.write(f"**Questions Answered:** {total_answered} / {len(st.session_state.questions)}")
+    st.write(f"**Correct Answers:** {raw} ({raw/total_answered*100:.1f}%)" if total_answered > 0 else "**Correct Answers:** 0")
 
     # Domain breakdown
-    st.subheader("Domain breakdown")
+    st.markdown("---")
+    st.subheader("📊 Domain Breakdown")
     for dom, (c,t) in st.session_state.per_domain.items():
         pct = (c/t*100) if t else 0.0
-        st.write(f"- **{dom}**: {c}/{t} correct ({pct:.1f}%)")
+        st.write(f"**{dom}**: {c}/{t} correct ({pct:.1f}%)")
 
-    st.divider()
-    if st.button("Retake (apply settings)"):
-        reset_quiz(total_override=int(st.session_state.get("desired_total", TOTAL_QUESTIONS)), seed=int(seed_val))
-        st.experimental_rerun()
-
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 Retake Quiz", use_container_width=True):
+            reset_quiz(total_override=int(st.session_state.get("desired_total", TOTAL_QUESTIONS)))
+            st.rerun()
+    with col2:
+        if st.button("⬅️ Back to Welcome", use_container_width=True):
+            st.session_state.quiz_started = False
+            st.rerun()
